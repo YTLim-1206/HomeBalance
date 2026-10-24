@@ -14,7 +14,8 @@ def main():
         "1. Create a chore. \n" 
         "2. View chore list. \n" 
         "3. Delete a chore. \n"
-        "4. Exit. \n"
+        "4. Edit a chore. \n"
+        "5. Exit. \n"
          "Enter a number: ")
         if choice == "1": 
             create_chore()
@@ -23,7 +24,9 @@ def main():
         elif choice == "3": 
             remove_chore("Chores.csv")
         elif choice == "4": 
-            break
+            edit_chore("Chores.csv")
+        elif choice == "5": 
+            sys.exit("System closed. ")
         else: 
             print("Please enter a valid number. ")
 
@@ -38,30 +41,37 @@ def get_id(filename):
         return 1
 
 def create_chore(): 
-    chore = input("Chore name: ").strip().title()
-    if not chore: 
-        print("Chore cannot be empty. ")
-        return
-    try: 
-        credits = int(input("credits (/10): "))
-    except ValueError: 
-        print("Invalid credits format. ")
-        return
-    if not 1 <= credits <= 10: 
-        print("credits must be between 1-10. ")
-        return
-    due = input("Due date (YYYY-MM-DD): ").strip()
-    try:
-        datetime.strptime(due, "%Y-%m-%d")
-    except ValueError:
-        print("Invalid date. Use YYYY-MM-DD.") # TODO: can set no due date chores
-        return
-    id = get_id("Chores.csv")
+    while True: 
+        chore = input("Chore name: ").strip().title()
+        if chore: 
+            break
+        else: 
+            print("Chore cannot be empty. ")
+    while True: 
+        try: 
+            credits = int(input("credits (/10): "))
+        except ValueError: 
+            print("Invalid credits format. ")
+            continue
+        if 1 <= credits <= 10: 
+            break
+        else: 
+            print("credits must be between 1-10. ")
+    while True: 
+        try:
+            due = input("Due date (YYYY-MM-DD): ").strip()
+            if not due: 
+                break
+            datetime.strptime(due, "%Y-%m-%d")
+            break
+        except ValueError:
+            print("Invalid date. Use YYYY-MM-DD.") 
+    chore_id = get_id("Chores.csv")
     with open ("Chores.csv", "a", newline="") as file: 
         writer = csv.DictWriter(file, fieldnames=["id", "chore", "credits", "due"])
         if file.tell() ==0: 
             writer.writeheader()
-        writer.writerow({"id":id, "chore": chore, "credits": credits, "due": due})
+        writer.writerow({"id":chore_id, "chore": chore, "credits": credits, "due": due})
     print("\nChore successfuly added")
 
 def view_chore(filename): 
@@ -158,10 +168,12 @@ def edit_chore(filename):
             while True: 
                 try:
                     change = input("Enter a new due date: ").strip()
+                    if not change: 
+                        break
                     datetime.strptime(change, "%Y-%m-%d")
                     break
                 except ValueError:
-                    print("Invalid date. Use YYYY-MM-DD.") # TODO: can set no due date chores
+                    print("Invalid date. Use YYYY-MM-DD.")
             for row in rows: 
                 if row["id"] == edit: 
                     row["due"] = change
