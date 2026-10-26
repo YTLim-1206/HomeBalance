@@ -75,13 +75,27 @@ def create_chore():
     print("\nChore successfuly added")
 
 def view_chore(filename): 
+    today = datetime.today().date()
     with open(filename, "r", newline="") as file: 
-        reader = csv.reader(file)
-        headers = next(reader)
-        if headers is None: 
+        reader = csv.DictReader(file)
+        rows = list(reader)
+        if not rows: 
             print("No chores found. ")
             return
-        print(tabulate(reader, headers=headers))
+        for row in rows: 
+            due = row["due"]
+            if not due: 
+                status = "no due date"
+            else: 
+                due_date = datetime.strptime(due, "%Y-%m-%d").date()
+                if today < due_date: 
+                    status = "Upcoming"
+                elif today == due_date: 
+                    status = "Due today"
+                else: 
+                    status = "Overdue"
+            row["status"] = status
+        print(tabulate(rows, headers="keys"))
 
 def remove_chore(filename): 
     view_chore(filename)
