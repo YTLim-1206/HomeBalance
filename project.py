@@ -11,21 +11,24 @@ def main():
         " HOMEBALANCE \n" 
         "=============\n")
         choice = input(
-        "1. Create a chore. \n" 
-        "2. View chore list. \n" 
-        "3. Delete a chore. \n"
-        "4. Edit a chore. \n"
-        "5. Exit. \n"
+        "1. Add member. \n"
+        "2. Create a chore. \n" 
+        "3. View chore list. \n" 
+        "4. Delete a chore. \n"
+        "5. Edit a chore. \n"
+        "6. Exit. \n"
          "Enter a number: ")
         if choice == "1": 
-            create_chore()
+            create_member()
         elif choice == "2": 
-            view_chore("Chores.csv")
+            create_chore()
         elif choice == "3": 
-            remove_chore("Chores.csv")
+            view_chore("Chores.csv")
         elif choice == "4": 
-            edit_chore("Chores.csv")
+            remove_chore("Chores.csv")
         elif choice == "5": 
+            edit_chore("Chores.csv")
+        elif choice == "6": 
             sys.exit("System closed. ")
         else: 
             print("Please enter a valid number. ")
@@ -34,11 +37,26 @@ def get_id(filename):
     try: 
         with open (filename, "r", newline="") as file: 
             reader = csv.DictReader(file)
+            max_id = 0
             for row in reader: 
-                idx = [int(row["id"])]
-            return f"{max(idx, default=0)+1 :03d}"
+                max_id = max(max_id, int(row["id"]))
+            return f"{max_id +1 :03d}"
     except FileNotFoundError: 
-        return 1
+        return "001"
+    
+def create_member(): 
+    while True: 
+        member = input("Name: ").strip().title()
+        if member: 
+            break
+        print("Member cannot be empty. ")
+    with open("Members.csv","a",newline="") as file: 
+        member_id = get_id("Members.csv")
+        writer = csv.DictWriter(file, fieldnames=["id", "name"])
+        if file.tell() == 0: 
+            writer.writeheader()
+        writer.writerow({"id":member_id, "name":member})
+    print("\nMember successfully added. ")
 
 def create_chore(): 
     while True: 
@@ -66,12 +84,31 @@ def create_chore():
             break
         except ValueError:
             print("Invalid date. Use YYYY-MM-DD.") 
+    while True: 
+        assignee_id = "None"
+        assignee_name = "None"
+        assignee_id = input("Assignee (member id): ")
+        if not assignee_id: 
+            break
+        else: 
+            with open("Members.csv","r",newline="") as file: 
+                reader = csv.DictReader(file)
+                rows = list(reader)
+                member_id_list = [row["id"] for row in rows]
+                if assignee_id in member_id_list: 
+                    for row in rows: 
+                        if assignee_id == row["id"]: 
+                            assignee_name = row["name"]
+                        break
+                    break
+                else: 
+                    print("Please enter a valid id. ")
     chore_id = get_id("Chores.csv")
     with open ("Chores.csv", "a", newline="") as file: 
-        writer = csv.DictWriter(file, fieldnames=["id", "chore", "credits", "due"])
+        writer = csv.DictWriter(file, fieldnames=["id", "chore", "credits", "due","assignee"]) # TODO: able to add few assignee
         if file.tell() ==0: 
             writer.writeheader()
-        writer.writerow({"id":chore_id, "chore": chore, "credits": credits, "due": due})
+        writer.writerow({"id":chore_id, "chore": chore, "credits": credits, "due": due, "assignee":f"{assignee_id}: {assignee_name}"})
     print("\nChore successfuly added")
 
 def view_chore(filename): 
@@ -95,6 +132,15 @@ def view_chore(filename):
                 else: 
                     status = "Overdue"
             row["status"] = status
+        print(tabulate(rows, headers="keys"))
+
+def view_member(): 
+    with open("Members.csv", "r", newline="") as file: 
+        reader = csv.DictReader(file)
+        rows = list(reader)
+        if not rows: 
+            print("No member found. ")
+            return
         print(tabulate(rows, headers="keys"))
 
 def remove_chore(filename): 
@@ -147,8 +193,8 @@ def edit_chore(filename):
             print("Chore not found. ")
             return
         while True: 
-            part = input("Choose a section to edit (chore/credits/due): ").lower().strip()
-            if part in ["chore", "chores", "credit", "credits", "due", "due date"]: 
+            part = input("Choose a section to edit (chore/credits/due/assignee): ").lower().strip()
+            if part in ["chore", "chores", "credit", "credits", "due", "due date", "assignee"]: 
                 break
             else: 
                 print("Please enter a valid section. ")
@@ -177,6 +223,23 @@ def edit_chore(filename):
             for row in rows: 
                 if row["id"] == edit: 
                     row["credits"] = str(change)
+                    break
+        elif part == "assignee": 
+            view_member()
+            while True: 
+                change = input("Enter a member's id: ").strip()
+                change = change.zfill(3)
+                with open("Members.csv","r",newline="") as file: 
+                    reader = csv.DictReader(file)
+                    members = list(reader)
+                    member_id_list = [member["id"] for member in members]
+                    if change in member_id_list: 
+                        break
+                    else: 
+                        print("Member id doesn't exists. ")
+            for row in rows: 
+                if row["id"] == edit: 
+                    row["assignee"] = change
                     break
         else: 
             while True: 
