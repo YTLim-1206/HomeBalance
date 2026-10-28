@@ -16,7 +16,8 @@ def main():
         "3. View chore list. \n" 
         "4. Delete a chore. \n"
         "5. Edit a chore. \n"
-        "6. Exit. \n"
+        "6. Tick a chore. \n"
+        "7. Exit. \n"
          "Enter a number: ")
         if choice == "1": 
             create_member()
@@ -29,6 +30,8 @@ def main():
         elif choice == "5": 
             edit_chore("Chores.csv")
         elif choice == "6": 
+            tick_chore()
+        elif choice == "7": 
             sys.exit("System closed. ")
         else: 
             print("Please enter a valid number. ")
@@ -52,10 +55,10 @@ def create_member():
         print("Member cannot be empty. ")
     with open("Members.csv","a",newline="") as file: 
         member_id = get_id("Members.csv")
-        writer = csv.DictWriter(file, fieldnames=["id", "name"])
+        writer = csv.DictWriter(file, fieldnames=["id", "name", "total_credits"])
         if file.tell() == 0: 
             writer.writeheader()
-        writer.writerow({"id":member_id, "name":member})
+        writer.writerow({"id":member_id, "name":member, "total_credits":0})
     print("\nMember successfully added. ")
 
 def create_chore(): 
@@ -85,12 +88,13 @@ def create_chore():
         except ValueError:
             print("Invalid date. Use YYYY-MM-DD.") 
     while True: 
-        assignee_id = "None"
-        assignee_name = "None"
+        assignee_id = ""
+        assignee_name = ""
         assignee_id = input("Assignee (member id): ")
         if not assignee_id: 
             break
         else: 
+            assignee_id = assignee_id.zfill(3)
             with open("Members.csv","r",newline="") as file: 
                 reader = csv.DictReader(file)
                 rows = list(reader)
@@ -99,16 +103,16 @@ def create_chore():
                     for row in rows: 
                         if assignee_id == row["id"]: 
                             assignee_name = row["name"]
-                        break
+                            break
                     break
                 else: 
                     print("Please enter a valid id. ")
     chore_id = get_id("Chores.csv")
     with open ("Chores.csv", "a", newline="") as file: 
-        writer = csv.DictWriter(file, fieldnames=["id", "chore", "credits", "due","assignee"]) # TODO: able to add few assignee
+        writer = csv.DictWriter(file, fieldnames=["id", "chore", "credits", "due","assignee","tick"]) # TODO: able to add few assignee
         if file.tell() ==0: 
             writer.writeheader()
-        writer.writerow({"id":chore_id, "chore": chore, "credits": credits, "due": due, "assignee":f"{assignee_id}: {assignee_name}"})
+        writer.writerow({"id":chore_id, "chore": chore, "credits": credits, "due": due, "assignee":f"{assignee_id}: {assignee_name}", "tick": "Pending"})
     print("\nChore successfuly added")
 
 def view_chore(filename): 
@@ -120,11 +124,12 @@ def view_chore(filename):
             print("No chores found. ")
             return
         for row in rows: 
-            due = row["due"]
-            if not due: 
+            if row["tick"] == "Completed": 
+                status = ""
+            elif not row["due"]: 
                 status = "no due date"
             else: 
-                due_date = datetime.strptime(due, "%Y-%m-%d").date()
+                due_date = datetime.strptime(row["due"], "%Y-%m-%d").date()
                 if today < due_date: 
                     status = "Upcoming"
                 elif today == due_date: 
@@ -234,12 +239,16 @@ def edit_chore(filename):
                     members = list(reader)
                     member_id_list = [member["id"] for member in members]
                     if change in member_id_list: 
+                        for member in members: 
+                            if member["id"] == change: 
+                                member_name_change = member["name"]
+                                break
                         break
                     else: 
                         print("Member id doesn't exists. ")
             for row in rows: 
                 if row["id"] == edit: 
-                    row["assignee"] = change
+                    row["assignee"] = f"{change}: {member_name_change}"
                     break
         else: 
             while True: 
@@ -261,5 +270,65 @@ def edit_chore(filename):
         writer.writerows(rows)
     print(f"Chore {edit} updated successfully. ")
 
+def tick_chore(): 
+    view_chore("Chores.csv")
+    tick = input("Enter a chore id for checking (or Q to undo): ").strip()
+    if tick.lower() == "q": 
+        print("Checking cancelled. ")
+        return
+    tick = tick.zfill(3)
+    with open("Chores.csv","r",newline="") as file: 
+        chore_reader = csv.DictReader(file)
+        chore_rows = list(chore_reader)
+        chore_fieldnames = chore_reader.fieldnames
+        chore_id_list = [chore_row["id"] for chore_row in chore_rows]
+        if tick not in chore_id_list: 
+            print("Chore not found. ")
+            return
+        for chore_row in chore_rows: 
+            if tick == chore_row["id"]: 
+                if chore_row["tick"] != "Pending": 
+                    print("Chore already completed. ")
+                    return
+                credits = int(chore_row["credits"])
+                assignee = chore_row["assignee"].split(":")[0]
+                if assignee == "": 
+                    while True: 
+                        view_member()
+                        assignee = input("Enter the member's id of whom the credits are given to: ").strip()
+                        assignee = assignee.zfill(3)
+                        with open("Members.csv","r",newline="") as file: 
+                            member_reader = csv.DictReader(file)
+                            member_rows = list(member_reader)
+                            member_id_list = [member_row["id"] for member_row in member_rows]
+                            if assignee not in member_id_list: 
+                                print("Member not found. ")
+                            else: 
+                                for member_row in member_rows: 
+                                    if assignee == member_row["id"]: 
+                                        assignee_name = member_row["name"]
+                                        break
+                                chore_row["assignee"] = f"{assignee}: {assignee_name}"
+                                break
+                chore_row["tick"] = "Completed"
+                break
+        with open("Members.csv","r",newline="") as file: 
+            member_reader = csv.DictReader(file)
+            member_rows = list(member_reader)
+            members_fieldnames = member_reader.fieldnames
+            for member_row in member_rows: 
+                if assignee == member_row["id"]: 
+                    member_row["total_credits"]   = credits + int(member_row["total_credits"])
+                    break
+        with open("Chores.csv","w",newline="") as file: 
+            chore_writer = csv.DictWriter(file, fieldnames=chore_fieldnames)
+            chore_writer.writeheader()
+            chore_writer.writerows(chore_rows)
+        with open("Members.csv","w",newline="") as file: 
+            member_writer = csv.DictWriter(file, fieldnames=members_fieldnames)
+            member_writer.writeheader()
+            member_writer.writerows(member_rows)
+        print("Chore ticked. ")
+            
 if __name__ == "__main__":
     main()
