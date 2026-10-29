@@ -14,10 +14,11 @@ def main():
         "1. Add member. \n"
         "2. Create a chore. \n" 
         "3. View chore list. \n" 
-        "4. Delete a chore. \n"
-        "5. Edit a chore. \n"
-        "6. Tick a chore. \n"
-        "7. Exit. \n"
+        "4. Delete or edit a member. \n"
+        "5. Delete a chore. \n"
+        "6. Edit a chore. \n"
+        "7. Tick a chore. \n"
+        "8. Exit. \n"
          "Enter a number: ")
         if choice == "1": 
             create_member()
@@ -26,12 +27,14 @@ def main():
         elif choice == "3": 
             view_chore("Chores.csv")
         elif choice == "4": 
-            remove_chore("Chores.csv")
+            edit_delete_member("Members.csv")
         elif choice == "5": 
-            edit_chore("Chores.csv")
+            delete_chore("Chores.csv")
         elif choice == "6": 
-            tick_chore()
+            edit_chore("Chores.csv")
         elif choice == "7": 
+            tick_chore()
+        elif choice == "8": 
             sys.exit("System closed. ")
         else: 
             print("Please enter a valid number. ")
@@ -148,7 +151,50 @@ def view_member():
             return
         print(tabulate(rows, headers="keys"))
 
-def remove_chore(filename): 
+def edit_delete_member(filename): 
+    while True: 
+        choice = input('Enter "delete" or "edit" to modify a member (or Q to undo): ').strip()
+        if choice.lower() == "q": 
+            print("Deletion cancelled. ")
+            return
+        elif choice.lower() == "delete": 
+            view_member()
+            delete = input("Enter a member id for removal: ").strip()
+            delete = delete.zfill(3)
+            with open(filename,"r",newline="") as file: 
+                reader = csv.DictReader(file)
+                fieldnames = reader.fieldnames
+                rows = list(reader)
+                id_list = [row["id"] for row in rows]
+                if delete not in id_list: 
+                    print("Member not found. ")
+                    return
+                while True: 
+                    confirmation = input(f"Confirm deletion on member {delete} (Yes/No): ").lower().strip()
+                    if confirmation == "no": 
+                        print("Deletion cancelled. ")
+                        return
+                    elif confirmation == "yes": 
+                        rows = [row for row in rows if row["id"] != delete]
+                        break
+                    else: 
+                        print("Please enter a valid input. ")
+                with open(filename, "w", newline="") as file: 
+                    writer = csv.DictWriter(file, fieldnames=fieldnames)
+                    writer.writeheader()
+                    writer.writerows(rows)
+                print("Member deleted. ")
+            break
+        elif choice.lower() == "edit": 
+            view_member()
+            edit = input("Enter a member id for edition: ").strip()
+            edit = edit.zfill(3)
+            ... # TODO: wait until there's more info to edit (right now it's only name)
+            break
+        else: 
+            print("Please enter a valid input (delete/edit). ")
+
+def delete_chore(filename): 
     view_chore(filename)
     remove = input("Enter a chore id for removal (or Q to undo): ").strip()
     if remove.lower() == "q": 
