@@ -2,7 +2,8 @@ import re
 import csv
 import sys
 from tabulate import tabulate
-from datetime import datetime
+from datetime import datetime, timedelta
+import calendar
 
 def main(): 
     while True: 
@@ -82,17 +83,28 @@ def create_chore():
         else: 
             print("credits must be between 1-10. ")
     while True: 
+        frequency = input("Recurrance frequency of the chore (None/Daily/Weekly/Monthly): ").strip().title()
+        if frequency not in ["None", "Daily", "Weekly", "Monthly"]: 
+            print("Please enter a valid frequency. ")
+        else: 
+            break
+    original_day = ""
+    while True: 
         try:
             due = input("Due date (YYYY-MM-DD): ").strip()
+            if not due and frequency != "None": 
+                print("Reccuring chores must have a due date. ")
+                continue
             if not due: 
                 break
             datetime.strptime(due, "%Y-%m-%d")
+            original_day = datetime.strptime(due, "%Y-%m-%d").day
             break
         except ValueError:
             print("Invalid date. Use YYYY-MM-DD.") 
     while True: 
         assignee_id = ""
-        assignee_name = ""
+        assignee_name = "None"
         assignee_id = input("Assignee (member id): ")
         if not assignee_id: 
             break
@@ -105,17 +117,17 @@ def create_chore():
                 if assignee_id in member_id_list: 
                     for row in rows: 
                         if assignee_id == row["id"]: 
-                            assignee_name = row["name"]
+                            assignee_name = f': {row["name"]}'
                             break
                     break
                 else: 
                     print("Please enter a valid id. ")
     chore_id = get_id("Chores.csv")
     with open ("Chores.csv", "a", newline="") as file: 
-        writer = csv.DictWriter(file, fieldnames=["id", "chore", "credits", "due","assignee","tick"]) # TODO: able to add few assignee
+        writer = csv.DictWriter(file, fieldnames=["id", "chore", "credits", "due","assignee","tick", "frequency", "original_day"]) # TODO: able to add few assignee
         if file.tell() ==0: 
             writer.writeheader()
-        writer.writerow({"id":chore_id, "chore": chore, "credits": credits, "due": due, "assignee":f"{assignee_id}: {assignee_name}", "tick": "Pending"})
+        writer.writerow({"id":chore_id, "chore": chore, "credits": credits, "due": due, "assignee": f"{assignee_id}{assignee_name}", "tick": "Pending", "frequency": frequency, "original_day": original_day})
     print("\nChore successfuly added")
 
 def view_chore(filename): 
@@ -157,15 +169,16 @@ def edit_delete_member(filename):
         if choice.lower() == "q": 
             print("Deletion cancelled. ")
             return
-        elif choice.lower() == "delete": 
-            view_member()
-            delete = input("Enter a member id for removal: ").strip()
-            delete = delete.zfill(3)
+        elif choice.lower() == "delete" or choice.lower() == "edit": 
             with open(filename,"r",newline="") as file: 
                 reader = csv.DictReader(file)
                 fieldnames = reader.fieldnames
                 rows = list(reader)
                 id_list = [row["id"] for row in rows]
+            if choice.lower() == "delete": 
+                view_member()
+                delete = input("Enter a member id for removal: ").strip()
+                delete = delete.zfill(3)
                 if delete not in id_list: 
                     print("Member not found. ")
                     return
@@ -179,18 +192,29 @@ def edit_delete_member(filename):
                         break
                     else: 
                         print("Please enter a valid input. ")
-                with open(filename, "w", newline="") as file: 
-                    writer = csv.DictWriter(file, fieldnames=fieldnames)
-                    writer.writeheader()
-                    writer.writerows(rows)
-                print("Member deleted. ")
-            break
-        elif choice.lower() == "edit": 
-            view_member()
-            edit = input("Enter a member id for edition: ").strip()
-            edit = edit.zfill(3)
-            ... # TODO: wait until there's more info to edit (right now it's only name)
-            break
+                    print("Member deleted. ")
+            elif choice.lower() == "edit": 
+                view_member()
+                edit = input("Enter a member id for edition: ").strip()
+                edit = edit.zfill(3)
+                if edit not in id_list: 
+                    print("Member not found. ")
+                    return
+                while True: 
+                    edited_name = input("Please enter a new name for the member. ").strip().title()
+                    if edited_name: 
+                        break
+                    print("Member cannot be empty. ")
+                for row in rows: 
+                    if row["id"] == edit: 
+                        row["name"] = edited_name
+                        break
+                    print("Member edited. ")
+                break
+            with open(filename, "w", newline="") as file: 
+                writer = csv.DictWriter(file, fieldnames=fieldnames)
+                writer.writeheader()
+                writer.writerows(rows)
         else: 
             print("Please enter a valid input (delete/edit). ")
 
@@ -244,8 +268,8 @@ def edit_chore(filename):
             print("Chore not found. ")
             return
         while True: 
-            part = input("Choose a section to edit (chore/credits/due/assignee): ").lower().strip()
-            if part in ["chore", "chores", "credit", "credits", "due", "due date", "assignee"]: 
+            part = input("Choose a section to edit (chore/credits/due/assignee/frequency): ").lower().strip()
+            if part in ["chore", "chores", "credit", "credits", "due", "due date", "assignee", "frequency"]: 
                 break
             else: 
                 print("Please enter a valid section. ")
@@ -296,11 +320,40 @@ def edit_chore(filename):
                 if row["id"] == edit: 
                     row["assignee"] = f"{change}: {member_name_change}"
                     break
+        elif part == "frequency": 
+            for row in rows: 
+                if row["id"] == edit:  
+                    while True: 
+                        change = input("Enter a new frequency (None/Daily/Weekly/Monthly): ").strip().title()
+                        if change not in ["None", "Daily", "Weekly", "Monthly"]: 
+                            print("Please enter a valid frequency")
+                            continue
+                        if change != "None" and row["due"] == "": 
+                            print("Recurring chores must have due date. ")
+                            while True: 
+                                try: 
+                                    due = input("Please enter a due date (YYYY-MM-DD) (Or Q to cancel). ").strip()
+                                    if due.lower() == "q": 
+                                        return
+                                    parsed_due = datetime.strptime(due, "%Y-%m-%d")
+                                    original_day = str(parsed_due.day)
+                                    row["due"] = due
+                                    row["original_day"] = original_day
+                                    break
+                                except ValueError: 
+                                    print("Invalid date. Use YYYY-MM-DD.")
+                        row["frequency"] = change
+                        break
         else: 
             while True: 
                 try:
                     change = input("Enter a new due date: ").strip()
                     if not change: 
+                        for row in rows: 
+                            if row["id"] == edit: 
+                                if row["frequency"] != "None": 
+                                    print("Cannot delete due date for reccuring chores. ")
+                                    return
                         break
                     datetime.strptime(change, "%Y-%m-%d")
                     break
@@ -309,6 +362,7 @@ def edit_chore(filename):
             for row in rows: 
                 if row["id"] == edit: 
                     row["due"] = change
+                    row["original_day"] = datetime.strptime(change, "%Y-%m-%d").day if change else ""
                     break
     with open(filename, "w", newline="") as file: 
         writer = csv.DictWriter(file, fieldnames=fieldnames)
@@ -338,7 +392,7 @@ def tick_chore():
                     return
                 credits = int(chore_row["credits"])
                 assignee = chore_row["assignee"].split(":")[0]
-                if assignee == "": 
+                if assignee == "None": 
                     while True: 
                         view_member()
                         assignee = input("Enter the member's id of whom the credits are given to: ").strip()
@@ -356,25 +410,48 @@ def tick_chore():
                                         break
                                 chore_row["assignee"] = f"{assignee}: {assignee_name}"
                                 break
+                else: 
+                    pass
                 chore_row["tick"] = "Completed"
-                break
-        with open("Members.csv","r",newline="") as file: 
-            member_reader = csv.DictReader(file)
-            member_rows = list(member_reader)
-            members_fieldnames = member_reader.fieldnames
-            for member_row in member_rows: 
-                if assignee == member_row["id"]: 
-                    member_row["total_credits"]   = credits + int(member_row["total_credits"])
+                new_chore = None
+                if chore_row["frequency"] != "None": 
+                    new_id = get_id("Chores.csv")
+                    current_due = datetime.strptime(chore_row["due"], "%Y-%m-%d").date()
+                    if chore_row["frequency"] == "Daily": 
+                        new_due = current_due + timedelta(days=1)
+                    elif chore_row["frequency"] == "Weekly": 
+                        new_due = current_due + timedelta(days=7)
+                    else: 
+                        year = current_due.year
+                        month = current_due.month + 1
+                        if month > 12: 
+                            year += 1
+                            month = 1
+                        total_days_of_month = calendar.monthrange(year, month)[1]
+                        day = min(int(chore_row["original_day"]), total_days_of_month)
+                        new_due = current_due.replace(year=year, month=month, day=day)
+                    new_due = new_due.strftime("%Y-%m-%d")
+                    new_chore = {"id":new_id,"chore":chore_row["chore"],"credits":chore_row["credits"],"due":new_due,"assignee":chore_row["assignee"],"tick":"Pending","frequency":chore_row["frequency"], "original_day": chore_row["original_day"]}
                     break
-        with open("Chores.csv","w",newline="") as file: 
-            chore_writer = csv.DictWriter(file, fieldnames=chore_fieldnames)
-            chore_writer.writeheader()
-            chore_writer.writerows(chore_rows)
-        with open("Members.csv","w",newline="") as file: 
-            member_writer = csv.DictWriter(file, fieldnames=members_fieldnames)
-            member_writer.writeheader()
-            member_writer.writerows(member_rows)
-        print("Chore ticked. ")
+    with open("Members.csv","r",newline="") as file: 
+        member_reader = csv.DictReader(file)
+        member_rows = list(member_reader)
+        members_fieldnames = member_reader.fieldnames
+        for member_row in member_rows: 
+            if assignee == member_row["id"]: 
+                member_row["total_credits"]   = credits + int(member_row["total_credits"])
+                break
+    with open("Chores.csv","w",newline="") as file: 
+        chore_writer = csv.DictWriter(file, fieldnames=chore_fieldnames)
+        chore_writer.writeheader()
+        if new_chore is not None: 
+            chore_rows.append(new_chore)
+        chore_writer.writerows(chore_rows)
+    with open("Members.csv","w",newline="") as file: 
+        member_writer = csv.DictWriter(file, fieldnames=members_fieldnames)
+        member_writer.writeheader()
+        member_writer.writerows(member_rows)
+    print("Chore ticked. ")
             
 if __name__ == "__main__":
     main()
