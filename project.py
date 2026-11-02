@@ -183,12 +183,23 @@ def edit_delete_member(filename):
                     print("Member not found. ")
                     return
                 while True: 
-                    confirmation = input(f"Confirm deletion on member {delete} (Yes/No): ").lower().strip()
+                    confirmation = input(f"Warning: Chores assigned to this member will be unassigned. \nConfirm deletion on member {delete} (Yes/No): ").lower().strip()
                     if confirmation == "no": 
                         print("Deletion cancelled. ")
                         return
                     elif confirmation == "yes": 
                         rows = [row for row in rows if row["id"] != delete]
+                        with open("Chores.csv","r",newline="") as file: 
+                            chore_reader = csv.DictReader(file)
+                            chore_rows = list(chore_reader)
+                            fieldnames = chore_reader.fieldnames
+                            for chore_row in chore_rows: 
+                                if chore_row["assignee"].split(": ")[0] == delete: 
+                                    chore_row["assignee"] = "None"
+                        with open("Chores.csv","w",newline="") as file: 
+                            chore_writer = csv.DictWriter(file, fieldnames=fieldnames)
+                            chore_writer.writeheader()
+                            chore_writer.writerows(chore_rows)
                         break
                     else: 
                         print("Please enter a valid input. ")
@@ -302,23 +313,26 @@ def edit_chore(filename):
         elif part == "assignee": 
             view_member()
             while True: 
-                change = input("Enter a member's id: ").strip()
+                change = input("Enter a member's id (Enter if want to unassign): ").strip()
+                if change == "":
+                    member_name_change = "None"
+                    break
                 change = change.zfill(3)
                 with open("Members.csv","r",newline="") as file: 
                     reader = csv.DictReader(file)
                     members = list(reader)
                     member_id_list = [member["id"] for member in members]
-                    if change in member_id_list: 
-                        for member in members: 
-                            if member["id"] == change: 
-                                member_name_change = member["name"]
-                                break
-                        break
-                    else: 
-                        print("Member id doesn't exists. ")
+                if change in member_id_list: 
+                    for member in members: 
+                        if member["id"] == change: 
+                            member_name_change = f": {member['name']}"
+                            break
+                    break
+                else: 
+                    print("Member id doesn't exists. ")
             for row in rows: 
                 if row["id"] == edit: 
-                    row["assignee"] = f"{change}: {member_name_change}"
+                    row["assignee"] = f"{change}{member_name_change}"
                     break
         elif part == "frequency": 
             for row in rows: 
