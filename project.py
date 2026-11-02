@@ -2,7 +2,7 @@ import re
 import csv
 import sys
 from tabulate import tabulate
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, date
 import calendar
 
 def main(): 
@@ -15,11 +15,13 @@ def main():
         "1. Add member. \n"
         "2. Create a chore. \n" 
         "3. View chore list. \n" 
-        "4. Delete or edit a member. \n"
-        "5. Delete a chore. \n"
-        "6. Edit a chore. \n"
-        "7. Tick a chore. \n"
-        "8. Exit. \n"
+        "4. View member and progress. \n"
+        "5. Delete or edit a member. \n"
+        "6. Delete a chore. \n"
+        "7. Edit a chore. \n"
+        "8. Tick a chore. \n"
+        "9. View track record. \n"
+        "10. Exit. \n"
          "Enter a number: ")
         if choice == "1": 
             create_member()
@@ -28,14 +30,18 @@ def main():
         elif choice == "3": 
             view_chore("Chores.csv")
         elif choice == "4": 
-            edit_delete_member("Members.csv")
+            view_member_progress()
         elif choice == "5": 
-            delete_chore("Chores.csv")
+            edit_delete_member("Members.csv")
         elif choice == "6": 
-            edit_chore("Chores.csv")
+            delete_chore("Chores.csv")
         elif choice == "7": 
-            tick_chore()
+            edit_chore("Chores.csv")
         elif choice == "8": 
+            tick_chore()
+        elif choice == "9": 
+            view_completion_history()
+        elif choice == "10": 
             sys.exit("System closed. ")
         else: 
             print("Please enter a valid number. ")
@@ -57,12 +63,20 @@ def create_member():
         if member: 
             break
         print("Member cannot be empty. ")
+    while True: 
+        try: 
+            monthly_target = int(input("Enter monthly credit target (Reference: each chore is awarded 1-10 credits): ").strip())
+        except ValueError: 
+            print("Credit target must be an integer. ")
+        if monthly_target >= 0: 
+            break
+        print("Credit target must be 0 or more. ")
     with open("Members.csv","a",newline="") as file: 
         member_id = get_id("Members.csv")
-        writer = csv.DictWriter(file, fieldnames=["id", "name", "total_credits"])
+        writer = csv.DictWriter(file, fieldnames=["id", "name", "total_credits", "monthly_target"])
         if file.tell() == 0: 
             writer.writeheader()
-        writer.writerow({"id":member_id, "name":member, "total_credits":0})
+        writer.writerow({"id":member_id, "name":member, "total_credits":0, "monthly_target": monthly_target})
     print("\nMember successfully added. ")
 
 def create_chore(): 
@@ -138,10 +152,9 @@ def view_chore(filename):
         if not rows: 
             print("No chores found. ")
             return
+        rows = [row for row in rows if row["tick"] == "Pending"]
         for row in rows: 
-            if row["tick"] == "Completed": 
-                status = ""
-            elif not row["due"]: 
+            if not row["due"]: 
                 status = "no due date"
             else: 
                 due_date = datetime.strptime(row["due"], "%Y-%m-%d").date()
@@ -154,14 +167,19 @@ def view_chore(filename):
             row["status"] = status
         print(tabulate(rows, headers="keys"))
 
-def view_member(): 
+def view_member_progress(): 
     with open("Members.csv", "r", newline="") as file: 
         reader = csv.DictReader(file)
         rows = list(reader)
         if not rows: 
             print("No member found. ")
             return
-        print(tabulate(rows, headers="keys"))
+        monthly_progress = get_monthly_progress()
+        for row in rows: 
+            monthly_credits = monthly_progress.get(row["id"], 0)
+            monthly_target = int(row["monthly_target"])
+            row["progress"] = f"{int((monthly_credits/monthly_target)*100)} %"
+        print(tabulate(rows, headers="keys")) 
 
 def edit_delete_member(filename): 
     while True: 
@@ -176,7 +194,7 @@ def edit_delete_member(filename):
                 rows = list(reader)
                 id_list = [row["id"] for row in rows]
             if choice.lower() == "delete": 
-                view_member()
+                view_member_progress()
                 delete = input("Enter a member id for removal: ").strip()
                 delete = delete.zfill(3)
                 if delete not in id_list: 
@@ -205,7 +223,7 @@ def edit_delete_member(filename):
                         print("Please enter a valid input. ")
                     print("Member deleted. ")
             elif choice.lower() == "edit": 
-                view_member()
+                view_member_progress()
                 edit = input("Enter a member id for edition: ").strip()
                 edit = edit.zfill(3)
                 if edit not in id_list: 
@@ -311,7 +329,7 @@ def edit_chore(filename):
                     row["credits"] = str(change)
                     break
         elif part == "assignee": 
-            view_member()
+            view_member_progress()
             while True: 
                 change = input("Enter a member's id (Enter if want to unassign): ").strip()
                 if change == "":
@@ -405,27 +423,25 @@ def tick_chore():
                     print("Chore already completed. ")
                     return
                 credits = int(chore_row["credits"])
+                chore_name = chore_row["chore"]
                 assignee = chore_row["assignee"].split(":")[0]
                 if assignee == "None": 
                     while True: 
-                        view_member()
+                        view_member_progress()
                         assignee = input("Enter the member's id of whom the credits are given to: ").strip()
+                        if assignee == "":
+                            print("Please enter a member id.")
+                            continue
                         assignee = assignee.zfill(3)
                         with open("Members.csv","r",newline="") as file: 
                             member_reader = csv.DictReader(file)
                             member_rows = list(member_reader)
-                            member_id_list = [member_row["id"] for member_row in member_rows]
-                            if assignee not in member_id_list: 
-                                print("Member not found. ")
-                            else: 
-                                for member_row in member_rows: 
-                                    if assignee == member_row["id"]: 
-                                        assignee_name = member_row["name"]
-                                        break
-                                chore_row["assignee"] = f"{assignee}: {assignee_name}"
-                                break
-                else: 
-                    pass
+                        member_id_list = [member_row["id"] for member_row in member_rows]
+                        if assignee not in member_id_list: 
+                            print("Member not found. ")
+                        else: 
+                            chore_row["assignee"] = assignee
+                            break
                 chore_row["tick"] = "Completed"
                 new_chore = None
                 if chore_row["frequency"] != "None": 
@@ -446,15 +462,16 @@ def tick_chore():
                         new_due = current_due.replace(year=year, month=month, day=day)
                     new_due = new_due.strftime("%Y-%m-%d")
                     new_chore = {"id":new_id,"chore":chore_row["chore"],"credits":chore_row["credits"],"due":new_due,"assignee":chore_row["assignee"],"tick":"Pending","frequency":chore_row["frequency"], "original_day": chore_row["original_day"]}
-                    break
+                break
     with open("Members.csv","r",newline="") as file: 
         member_reader = csv.DictReader(file)
         member_rows = list(member_reader)
         members_fieldnames = member_reader.fieldnames
-        for member_row in member_rows: 
-            if assignee == member_row["id"]: 
-                member_row["total_credits"]   = credits + int(member_row["total_credits"])
-                break
+    for member_row in member_rows: 
+        if assignee == member_row["id"]: 
+            assignee_name = member_row["name"]
+            member_row["total_credits"]   = credits + int(member_row["total_credits"])
+            break
     with open("Chores.csv","w",newline="") as file: 
         chore_writer = csv.DictWriter(file, fieldnames=chore_fieldnames)
         chore_writer.writeheader()
@@ -465,7 +482,40 @@ def tick_chore():
         member_writer = csv.DictWriter(file, fieldnames=members_fieldnames)
         member_writer.writeheader()
         member_writer.writerows(member_rows)
+    with open("CreditHistory.csv","a",newline="") as file: 
+        history_writer = csv.DictWriter(file, fieldnames=["member", "chore", "completion_date", "credits"])
+        if file.tell() == 0: 
+            history_writer.writeheader()
+        history_writer.writerow({"member": f"{assignee}: {assignee_name}", "chore": f"{tick}: {chore_name}", "completion_date": date.today(), "credits": credits})
     print("Chore ticked. ")
-            
+
+def get_monthly_progress(): 
+    current_month = date.today().strftime("%Y-%m")
+    with open("CreditHistory.csv","a",newline="") as file: 
+        history_writer = csv.DictWriter(file, fieldnames=["member", "chore", "completion_date", "credits"])
+        if file.tell() == 0: 
+            history_writer.writeheader()
+    with open("CreditHistory.csv","r",newline="") as file: 
+        history_reader = csv.DictReader(file)
+        rows = list(history_reader)
+    monthly_progress = {}
+    for row in rows: 
+        if row["completion_date"][:7] == current_month: 
+            member_id = row["member"].split(": ")[0]
+            credits = int(row["credits"])
+            if member_id not in monthly_progress: 
+                monthly_progress[member_id] = 0
+            monthly_progress[member_id] += credits
+    return monthly_progress
+
+def view_completion_history(): 
+    with open("CreditHistory.csv", "r", newline="") as file: 
+        history_reader = csv.DictReader(file)
+        history_rows = list(history_reader)
+        if not history_rows: 
+            print("No history found. ")
+            return
+    print(tabulate(history_rows, headers="keys")) 
+
 if __name__ == "__main__":
     main()
