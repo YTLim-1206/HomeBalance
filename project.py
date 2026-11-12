@@ -68,9 +68,10 @@ def create_member():
             monthly_target = int(input("Enter monthly credit target (Reference: each chore is awarded 1-10 credits): ").strip())
         except ValueError: 
             print("Credit target must be an integer. ")
-        if monthly_target >= 0: 
+            continue
+        if monthly_target >= 1: 
             break
-        print("Credit target must be 0 or more. ")
+        print("Credit target must be larger than 0. ")
     with open("Members.csv","a",newline="") as file: 
         member_id = get_id("Members.csv")
         writer = csv.DictWriter(file, fieldnames=["id", "name", "total_credits", "monthly_target"])
@@ -95,7 +96,7 @@ def create_chore():
         if 1 <= credits <= 10: 
             break
         else: 
-            print("credits must be between 1-10. ")
+            print("Credits must be between 1-10. ")
     while True: 
         frequency = input("Recurrance frequency of the chore (None/Daily/Weekly/Monthly): ").strip().title()
         if frequency not in ["None", "Daily", "Weekly", "Monthly"]: 
@@ -142,7 +143,7 @@ def create_chore():
         if file.tell() ==0: 
             writer.writeheader()
         writer.writerow({"id":chore_id, "chore": chore, "credits": credits, "due": due, "assignee": f"{assignee_id}{assignee_name}", "tick": "Pending", "frequency": frequency, "original_day": original_day})
-    print("\nChore successfuly added")
+    print("\nChore successfully added. ")
 
 def view_chore(filename): 
     today = datetime.today().date()
@@ -165,6 +166,9 @@ def view_chore(filename):
                 else: 
                     status = "Overdue"
             row["status"] = status
+        if not rows: 
+            print("No chores found. ")
+            return
         print(tabulate(rows, headers="keys"))
 
 def view_member_progress(): 
@@ -174,7 +178,7 @@ def view_member_progress():
         if not rows: 
             print("No member found. ")
             return
-        monthly_progress = get_monthly_progress()
+        monthly_progress = get_monthly_progress("CreditHistory.csv")
         for row in rows: 
             monthly_credits = monthly_progress.get(row["id"], 0)
             monthly_target = int(row["monthly_target"])
@@ -210,18 +214,18 @@ def edit_delete_member(filename):
                         with open("Chores.csv","r",newline="") as file: 
                             chore_reader = csv.DictReader(file)
                             chore_rows = list(chore_reader)
-                            fieldnames = chore_reader.fieldnames
-                            for chore_row in chore_rows: 
-                                if chore_row["assignee"].split(": ")[0] == delete: 
-                                    chore_row["assignee"] = "None"
+                            chore_fieldnames = chore_reader.fieldnames
+                        for chore_row in chore_rows: 
+                            if chore_row["assignee"].split(": ")[0] == delete: 
+                                chore_row["assignee"] = "None"
                         with open("Chores.csv","w",newline="") as file: 
-                            chore_writer = csv.DictWriter(file, fieldnames=fieldnames)
+                            chore_writer = csv.DictWriter(file, fieldnames=chore_fieldnames)
                             chore_writer.writeheader()
                             chore_writer.writerows(chore_rows)
+                        print("Member deleted. ")
                         break
                     else: 
                         print("Please enter a valid input. ")
-                    print("Member deleted. ")
             elif choice.lower() == "edit": 
                 view_member_progress()
                 edit = input("Enter a member id for edition: ").strip()
@@ -238,12 +242,12 @@ def edit_delete_member(filename):
                     if row["id"] == edit: 
                         row["name"] = edited_name
                         break
-                    print("Member edited. ")
-                break
+                print("Member edited. ")
             with open(filename, "w", newline="") as file: 
                 writer = csv.DictWriter(file, fieldnames=fieldnames)
                 writer.writeheader()
                 writer.writerows(rows)
+            return
         else: 
             print("Please enter a valid input (delete/edit). ")
 
@@ -440,7 +444,11 @@ def tick_chore():
                         if assignee not in member_id_list: 
                             print("Member not found. ")
                         else: 
-                            chore_row["assignee"] = assignee
+                            for member_row in member_rows: 
+                                if assignee == member_row["id"]: 
+                                    assignee_name = member_row["name"] 
+                                    break
+                            chore_row["assignee"] = f"{assignee}: {assignee_name}"
                             break
                 chore_row["tick"] = "Completed"
                 new_chore = None
@@ -489,13 +497,13 @@ def tick_chore():
         history_writer.writerow({"member": f"{assignee}: {assignee_name}", "chore": f"{tick}: {chore_name}", "completion_date": date.today(), "credits": credits})
     print("Chore ticked. ")
 
-def get_monthly_progress(): 
+def get_monthly_progress(filename): 
     current_month = date.today().strftime("%Y-%m")
-    with open("CreditHistory.csv","a",newline="") as file: 
+    with open(filename,"a",newline="") as file: 
         history_writer = csv.DictWriter(file, fieldnames=["member", "chore", "completion_date", "credits"])
         if file.tell() == 0: 
             history_writer.writeheader()
-    with open("CreditHistory.csv","r",newline="") as file: 
+    with open(filename,"r",newline="") as file: 
         history_reader = csv.DictReader(file)
         rows = list(history_reader)
     monthly_progress = {}
